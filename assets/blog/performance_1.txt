@@ -1,4 +1,4 @@
-I'll be starting a performance series on Smart Files and why Smart Files (although not written to optimize for performance) far surpasses regular vanilla read's and write's in some contexts for file io.
+I'll be starting a performance series on Numstore (specifically the SmartFiles pattern) and why Smart Files (although not written to optimize for performance) far surpasses regular vanilla reads and writes in some contexts for file io.
 
 For this series, I want to stay truthful and humble about what Numstore can and can't do. To stay truthful, I'm breaking down performance into small self contained
 use-cases. I'll explore each of these use cases fully and deeply and talk about where Numstore shines and where Numstore shouldn't be used. I'm never going to intentionally hide 
@@ -9,8 +9,7 @@ With that, let's talk about inner file mutations.
 Inner Inserts
 =============
 
-For this first performance analysis, I'll talk about inner mutations - specifically inserting data into the middle of a file. 
-Later I'll talk about inner removals.
+For this first performance analysis, I'll talk about inner mutations - specifically inserting data into the middle of a file. Later I'll talk about inner removals (which complete's the "inner mutation" operations analysis).
 
 Definition: Inner Insert 
 ------------------------
@@ -123,7 +122,7 @@ FALLOC_FL_INSERT_RANGE: Solving it better for Linux
 ---------------------------------------------------
 
 If you're running on Linux 4.1 or later and you have XFS or Linux 4.2 or later on Ext4
-you can call fallocate with FALLOC_FL_INSERT_RANGE
+you can call fallocate with FALLOC_FL_INSERT_RANGE. This is pretty restricted though.
 
 FALLOC_FL_INSERT_RANGE requires filesystem support.  Filesystems
        that support this operation include XFS (since Linux 4.1) and ext4

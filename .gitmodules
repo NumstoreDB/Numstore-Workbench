@@ -1,0 +1,9 @@
+[submodule "thirdparty/numstore"]
+	path = thirdparty/numstore
+	url = git@github.com:NumstoreDB/Numstore
+[submodule "thirdparty/FlameGraph"]
+	path = thirdparty/FlameGraph
+	url = git@github.com:brendangregg/FlameGraph.git
+[submodule "build/thirdparty/FlameGraph"]
+	path = build/thirdparty/FlameGraph
+	url = git@github.com:brendangregg/FlameGraph.git
