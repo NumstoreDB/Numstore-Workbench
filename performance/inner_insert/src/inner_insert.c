@@ -1,5 +1,5 @@
 /*
- * CAUTION: This is not error handled (benchmark scaffolding only).
+ * CAUTION: This is not error handled (benchmark scaffollding only).
  */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* fallocate, FALLOC_FL_INSERT_RANGE, copy_file_range */
@@ -11,15 +11,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/vfs.h> /* fstatfs(), struct statfs */
 #include <unistd.h>  /* copy_file_range(), pread(), pwrite(), ftruncate() */
 
-#include "big_file_inner_insert.h"
+#include "inner_insert.h"
 #include "csx_assert.h"
 #include "error.h"
 #include "os.h"
 #include "smartfiles.h"
 #include "stdtypes.h"
+
+/******************************************************************************
+ * SECTION: Printing
+ * ----------------------------------------------------------------------------
+ *
+ * @brief Utility Functions for printing 
+ ******************************************************************************/
 
 
 void
@@ -90,9 +96,13 @@ print_friendly (
   printf ("  Chunk size : %.3f KiB\n", KiB(p->chunk_size ));
 }
 
-/* -------------------------------------------------------------------------
- * Timed portions — isolated for flame graph visibility
- * ------------------------------------------------------------------------- */
+/******************************************************************************
+ * SECTION: Unbuffered
+ * ----------------------------------------------------------------------------
+ *
+ * @brief One big malloc for the data to insert
+ ******************************************************************************/
+
 
 static void
 unbuffered_timed_portion (
@@ -109,89 +119,6 @@ unbuffered_timed_portion (
   i_fsync (fp, e);
 }
 
-static void
-buffered_timed_portion (
-    i_file              *fp,
-    const struct bench_params *p,
-    const unsigned char *insert,
-    unsigned char       *buffer,
-    error               *e
-)
-{
-  u64 remaining = p->fsize - p->ofst;
-  u64 read_pos  = p->fsize;
-
-  /* Read back-to-front so the shift never clobbers pending source data */
-  while (remaining > 0)
-  {
-    const u64 chunk = remaining < p->chunk_size ? remaining : p->chunk_size;
-    read_pos -= chunk;
-
-    i_pread_all_expect (fp, buffer, chunk, read_pos, e);
-    i_pwrite_all (fp, buffer, chunk, read_pos + p->insize, e);
-
-    remaining -= chunk;
-  }
-
-  i_pwrite_all (fp, insert, p->insize, p->ofst, e);
-  i_fsync (fp, e);
-}
-
-static void
-optimized_timed_portion (
-    i_file              *fp,
-    const struct bench_params *p,
-    const unsigned char *insert,
-    error               *e
-)
-{
-  /*
-   * Numstore doesn't support fallocate inner inserts
-   * so I'll reach inside the file to get the fd. This
-   * is only linux anyways.
-   *
-   * Obviously not the best software engineer practice, but
-   * that's ok
-   *
-   * This is easy to fail - e.g. wrong block sizes etc
-   * so I'll add error handling here only
-   */
-  if (fallocate (fp->fd, FALLOC_FL_INSERT_RANGE, (off_t)p->ofst, (off_t)p->insize))
-  {
-    perror ("fallocate(FALLOC_FL_INSERT_RANGE)");
-    abort ();
-  }
-
-  i_pwrite_all (fp, insert, p->insize, p->ofst, e);
-  i_fsync (fp, e);
-}
-
-static void
-smartfiles_timed_portion (
-    smfile_t            *file,
-    const struct bench_params *p,
-    const unsigned char *insert
-)
-{
-  smfile_insert (file, insert, p->ofst, p->insize);
-}
-
-/* -------------------------------------------------------------------------
- * Helpers
- * ------------------------------------------------------------------------- */
-
-static long
-get_block_size (int fd)
-{
-  struct statfs sfs;
-  if (fstatfs (fd, &sfs) != 0 || sfs.f_bsize <= 0)
-    abort ();
-  return sfs.f_bsize;
-}
-
-/* -------------------------------------------------------------------------
- * Benchmark methods — each returns time in ms
- * ------------------------------------------------------------------------- */
 
 double
 bench_unbuffered (
@@ -228,6 +155,43 @@ bench_unbuffered (
   return (double)(end - start) / 1e6;
 }
 
+/******************************************************************************
+ * SECTION: Buffered
+ * ----------------------------------------------------------------------------
+ *
+ * @brief A fixed sized write block and a bunch of little writes / read
+ ******************************************************************************/
+
+
+static void
+buffered_timed_portion (
+    i_file              *fp,
+    const struct bench_params *p,
+    const unsigned char *insert,
+    unsigned char       *buffer,
+    error               *e
+)
+{
+  u64 remaining = p->fsize - p->ofst;
+  u64 read_pos  = p->fsize;
+
+  /* Read back-to-front so the shift never clobbers pending source data */
+  while (remaining > 0)
+  {
+    const u64 chunk = remaining < p->chunk_size ? remaining : p->chunk_size;
+    read_pos -= chunk;
+
+    i_pread_all_expect (fp, buffer, chunk, read_pos, e);
+    i_pwrite_all (fp, buffer, chunk, read_pos + p->insize, e);
+
+    remaining -= chunk;
+  }
+
+  i_pwrite_all (fp, insert, p->insize, p->ofst, e);
+  i_fsync (fp, e);
+}
+
+
 double
 bench_buffered (
     const unsigned char *seed,
@@ -263,8 +227,47 @@ bench_buffered (
   return (double)(end - start) / 1e6;
 }
 
+#ifdef __linux__
+
+/******************************************************************************
+ * SECTION: fallocate 
+ * ----------------------------------------------------------------------------
+ *
+ * @brief Uses fallocate FALLOC_FL_INSERT_RANGE Only works on linux
+ ******************************************************************************/
+
+
+static void
+fallocate_timed_portion (
+    i_file              *fp,
+    const struct bench_params *p,
+    const unsigned char *insert,
+    error               *e
+)
+{
+  /*
+   * Numstore doesn't support fallocate inner inserts
+   * so I'll reach inside the file to get the fd. This
+   * is only linux anyways.
+   *
+   * Obviously not the best software engineer practice, but
+   * that's ok
+   *
+   * This is easy to fail - e.g. wrong block sizes etc
+   * so I'll add error handling here only
+   */
+  if (fallocate (fp->fd, FALLOC_FL_INSERT_RANGE, (off_t)p->ofst, (off_t)p->insize))
+  {
+    perror ("fallocate(FALLOC_FL_INSERT_RANGE)");
+    abort ();
+  }
+
+  i_pwrite_all (fp, insert, p->insize, p->ofst, e);
+  i_fsync (fp, e);
+}
+
 double
-bench_optimized (
+bench_fallocate (
     const unsigned char *seed,
     const unsigned char *insert,
     const struct bench_params *p,
@@ -287,24 +290,12 @@ bench_optimized (
    * I'm sure there are some exceptions but
    * ext4 is the big one so I'll keep this
    */
-  long block_size = get_block_size (fp.fd);
-  if ((p->ofst % block_size != 0) || (p->insize % block_size != 0))
-  {
-    fprintf (
-        stderr,
-        "Expecting offset (%ld) and insize (%ld) to be multiple of block size (%ld)",
-        p->ofst,
-        p->insize,
-        block_size
-    );
-    abort ();
-  }
 
   i_timer timer;
   i_timer_create (&timer, e);
   u64 start = i_timer_now_ns (&timer);
 
-  optimized_timed_portion (&fp, p, insert, e);
+  fallocate_timed_portion (&fp, p, insert, e);
 
   u64 end = i_timer_now_ns (&timer);
   ASSERT (end >= start);
@@ -314,6 +305,27 @@ bench_optimized (
 
   return (double)(end - start) / 1e6;
 }
+#endif
+
+/******************************************************************************
+ * SECTION: Smart Files
+ * ----------------------------------------------------------------------------
+ *
+ * @brief Smart files implementation
+ ******************************************************************************/
+
+
+static void
+smartfiles_timed_portion (
+    smfile_t            *file,
+    const struct bench_params *p,
+    const unsigned char *insert
+)
+{
+  smfile_insert (file, insert, p->ofst, p->insize);
+}
+
+
 
 double
 bench_smartfiles (

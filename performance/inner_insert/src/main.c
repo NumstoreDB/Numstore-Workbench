@@ -1,4 +1,4 @@
-#include "big_file_inner_insert.h"
+#include "inner_insert.h"
 
 int
 main (int argc, char **argv)
@@ -15,7 +15,7 @@ main (int argc, char **argv)
    * Flags (optional, any order):
    *  --unbuffered  - run unbuffered benchmark
    *  --buffered    - run buffered benchmark
-   *  --optimized   - run optimized benchmark
+   *  --fallocate   - run fallocate benchmark
    *  --smartfiles  - run smartfiles benchmark
    *  --verbose     - print header; otherwise just data
    *
@@ -26,7 +26,7 @@ main (int argc, char **argv)
     fprintf (
         stdout,
         "Usage: big_file_inner_insert <FILE SIZE> <OFFSET> <INSERT SIZE> "
-        "<CHUNK SIZE> [--unbuffered] [--buffered] [--optimized] "
+        "<CHUNK SIZE> [--unbuffered] [--buffered] [--fallocate] "
         "[--smartfiles] [--verbose]\n"
     );
     return EXIT_FAILURE;
@@ -41,7 +41,7 @@ main (int argc, char **argv)
 
   int run_unbuffered = 0;
   int run_buffered   = 0;
-  int run_optimized  = 0;
+  int run_fallocate  = 0;
   int run_smartfiles = 0;
   int verbose        = 0;
   int csv            = 0;
@@ -49,7 +49,7 @@ main (int argc, char **argv)
   {
     if      (strncmp (argv[i], "--unbuffered", 12) == 0) run_unbuffered = 1;
     else if (strncmp (argv[i], "--buffered",   10) == 0) run_buffered   = 1;
-    else if (strncmp (argv[i], "--optimized",  11) == 0) run_optimized  = 1;
+    else if (strncmp (argv[i], "--fallocate",  11) == 0) run_fallocate  = 1;
     else if (strncmp (argv[i], "--smartfiles", 12) == 0) run_smartfiles = 1;
     else if (strncmp (argv[i], "--verbose",     9) == 0) verbose        = 1;
     else if (strncmp (argv[i], "--csv",         5) == 0) csv            = 1;
@@ -61,9 +61,9 @@ main (int argc, char **argv)
   }
 
   /* No method flags = run all */
-  if (!run_unbuffered && !run_buffered && !run_optimized && !run_smartfiles)
+  if (!run_unbuffered && !run_buffered && !run_fallocate && !run_smartfiles)
   {
-    run_unbuffered = run_buffered = run_optimized = run_smartfiles = 1;
+    run_unbuffered = run_buffered = run_fallocate = run_smartfiles = 1;
   }
 
   /*
@@ -123,12 +123,17 @@ main (int argc, char **argv)
     count++;
   }
 
-  if (run_optimized)
+  if (run_fallocate)
   {
-    results[count].label  = "optimized";
+#ifdef __linux__
+    results[count].label  = "fallocate";
     results[count].mem_b = KiB(p.insize);
-    results[count].time_ms = bench_optimized (seed, insert, &p, &e);
+    results[count].time_ms = bench_fallocate (seed, insert, &p, &e);
     count++;
+#else 
+    fprintf(stderr, "Fallocate version not supported on your machine. Need Linux\n");
+    abort();
+#endif
   }
 
   if (run_smartfiles)

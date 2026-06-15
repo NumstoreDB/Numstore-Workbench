@@ -18,4 +18,4 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 find_package(Numstore REQUIRED)
 
-add_subdirectory(performance/big_file_inner_insert)
+add_subdirectory(performance/inner_insert)

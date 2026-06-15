@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/vfs.h> /* fstatfs(), struct statfs */
 #include <unistd.h>  /* copy_file_range(), pread(), pwrite(), ftruncate() */
 
 #include "csx_assert.h"
@@ -21,6 +20,14 @@
 #include "stdtypes.h"
 
 #define KiB(bytes) ((bytes) / 1024.0)
+
+/******************************************************************************
+ * SECTION: Data types
+ * ----------------------------------------------------------------------------
+ *
+ * @brief Bench mark parameters and results
+ ******************************************************************************/
+
 
 struct bench_params
 {
@@ -36,6 +43,10 @@ struct bench_result
   double      time_ms;
   double      mem_b;
 };
+
+/******************************************************************************
+ * SECTION: Printing
+ ******************************************************************************/
 
 void
 print_csv_header (void);
@@ -54,6 +65,11 @@ print_friendly (
     const struct bench_params *p
 );
 
+/******************************************************************************
+ * SECTION: Unbuffered
+ ******************************************************************************/
+
+
 double
 bench_unbuffered (
     const unsigned char *seed,
@@ -61,6 +77,11 @@ bench_unbuffered (
     const struct bench_params *p,
     error *e
 );
+
+/******************************************************************************
+ * SECTION: Buffered
+ ******************************************************************************/
+
 
 double
 bench_buffered (
@@ -70,13 +91,23 @@ bench_buffered (
     error *e
 );
 
+#ifdef __linux__
+/******************************************************************************
+ * SECTION: FALLOC_FL_INSERT_RANGE
+ ******************************************************************************/
+
 double
-bench_optimized (
+bench_fallocate (
     const unsigned char *seed,
     const unsigned char *insert,
     const struct bench_params *p,
     error *e
 );
+#endif
+
+/******************************************************************************
+ * SECTION: smartfiles
+ ******************************************************************************/
 
 double
 bench_smartfiles (

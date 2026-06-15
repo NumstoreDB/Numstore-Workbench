@@ -4,15 +4,12 @@ import itertools
 import os
 import sys
 
-program     = "./build/performance/big_file_inner_insert/big_file_inner_insert"
-output_path = "performance/big_file_inner_insert/results/trials2.csv"
+program     = "./build/performance/inner_insert/scripts/inner_insert"
+output_path = "performance/inner_insert/results/trials.csv"
 
-# 4096 (2^12) to 20 GiB (2^34 = 17 GiB, 2^35 = 34 GiB — round up to 2^34 is closest ≤20 GiB)
-# 20 GiB = 21_474_836_480, so max power where 2^p <= 20*1024^3 is p=34 (17,179,869,184)
-# Evenly spaced exponents → logarithmic spacing in byte values
-file_size_powers  = list(range(12, 35, 4))   # 2^12 to 2^34, step 2  (~4 KiB to ~17 GiB)
-insert_size_powers = list(range(12, 34, 4))  # 2^12 to 2^33, step 2  (~4 KiB to ~8 GiB)
-offset_powers     = list(range(12, 35, 4))   # same range as file sizes; filtered to < fsize below
+file_size_powers  = list(range(34, 12, 4))  
+insert_size_powers = list(range(34, 12, 4))  
+offset_powers     = list(range(34, 12, 4)) 
 
 chunk_size = 4096
 
@@ -29,7 +26,7 @@ with open(output_path, "w") as csv_file:
         print(f"{fi+1}/{len(file_sizes)}, {oi+1}/{len(offsets)}, {ii+1}/{len(insert_sizes)}")
         if ofst >= fsize:
             continue
-        args = [program, str(fsize), str(ofst), str(insize), str(chunk_size), "--csv"]
+        args = [program, str(fsize), str(ofst), str(insize), str(chunk_size), "--csv", "--fallocate", "--buffered", "--smartfiles", "--unbuffered"]
         if first:
             args.append("--verbose")
             first = False
